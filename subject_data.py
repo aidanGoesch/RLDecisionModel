@@ -6,8 +6,8 @@ class SubjectData:
         self.mem_rec = None
 
         self.choice_blocks = None
-        self.invalid_probe_trials = None
-        self.mem_probe_trials = None
+        self.invalid_probe_trials = None    # type = list
+        self.mem_probe_trials = None        # type = set
 
     def is_empty(self):
         return (self.trial_rec is None and self.mem_rec is None and self.choice_blocks is None and
