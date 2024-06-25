@@ -1,8 +1,14 @@
 import numpy as np
+
+from math import inf
 from types import SimpleNamespace
+from scipy.optimize import minimize
 
 
-from src.utils import sign, PARAM_CONSTANTS, FLAGS
+from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params
+
+NUM_PARAMS = 5
+PARAMS = ["alpha", "beta", "beta_c", "alpha", "beta"]
 
 NUM_BANDITS = 3
 MAX_TRIALS = 180
@@ -15,6 +21,7 @@ class Model:
         self.input_data = input_data
         self.precomputed = precomputed_data
         self.trial_rec = trial_rec
+        self.subj_idx = subj_idx
         self.flags = FLAGS    # load defaults
 
         self.flags["resetQ"] = False
@@ -23,10 +30,18 @@ class Model:
         self.flags["choice_rec"] = precomputed_data.choice_rec
         self.flags["combs"] = precomputed_data.combs
 
+        self.verbose = False
+        self.very_verbose = False
 
+        self.results = {
+            "num_params": NUM_PARAMS,
+            "n_log_lik": inf,
+            "file": None   # I don't think we need this for now
+        }
 
-    def hybrid_likelihood(self, alpha, beta, beta_c, flags : SimpleNamespace = FLAGS):
-        num_samples = flags.num_samples
+    def likelihood(self, alpha, beta, beta_c):
+        """Function that computes the log likelihood of choosing each deck of cards"""
+        num_samples = self.flags.num_samples
 
         # initialize choice trials
         choice_trials = np.array([(x.choice > -1 and x.type == 0) for x in self.trial_rec[:MAX_TRIALS]])   # change this later
@@ -39,8 +54,8 @@ class Model:
         alpha_td = alpha
         beta_td = beta
 
-        combs = flags.combs[num_samples]
-        choice_rec = flags.choice_rec
+        combs = self.flags.combs[num_samples]
+        choice_rec = self.flags.choice_rec
 
         Q_td = np.array([np.array([0 for x in range(NUM_BANDITS)]) for y in range(MAX_TRIALS)])
         rpe_td = np.array([0 for i in range(MAX_TRIALS)])
@@ -122,18 +137,97 @@ class Model:
 
         n_log_likelihood = -sum(np.log(pc[choice_trials]))
 
-        n_log_likelihood -= np.log(flags.pp_alpha[alpha_smp])
-        n_log_likelihood -= np.log(flags.pp_beta[beta_smp])
-        n_log_likelihood -= np.log(flags.pp_beta_C[beta_c])
-        n_log_likelihood -= np.log(flags.pp_alpha[alpha_td])
-        n_log_likelihood -= np.log(flags.pp_beta[alpha_td])
+        n_log_likelihood -= np.log(self.flags.pp_alpha[alpha_smp])
+        n_log_likelihood -= np.log(self.flags.pp_beta[beta_smp])
+        n_log_likelihood -= np.log(self.flags.pp_beta_C[beta_c])
+        n_log_likelihood -= np.log(self.flags.pp_alpha[alpha_td])
+        n_log_likelihood -= np.log(self.flags.pp_beta[alpha_td])
 
         return n_log_likelihood
 
 
     def fit_model(self, subj_idx):
-        print("---- FITTING SUBJECT ----")
+        print(f"---- FITTING SUBJECT {self.subj_idx}----")
+
+        start, n_unchanged_trials = 0, 0
+
+        while n_unchanged_trials < ITERATIONS:
+            start += 1
+
+            # pick random starting values for the params
+            x_0 = [np.random.uniform(PARAM_CONSTANTS[PARAMS[x]][0]) for x in range(NUM_PARAMS)]
+
+            transformed_x_0 = transform_params(x_0, PARAMS)
+
+            options = {"disp": False}
+
+            result = minimize(self.likelihood, transformed_x_0, options)
+
+            transformed_xf = transform_params(result.x, PARAMS)
 
 
+            if self.verbose:
+                print("DEBUG")
+
+            if result.status != 1:  # this might be wrong
+                print("Failed to converge")
+                continue
+            elif self.very_verbose:
+                print("DEBUG")
+
+            if start == 1 or result.fun  < self.results["n_log_lik"]:
+                if self.verbose:
+                    print("DEBUG")
+
+                n_unchanged_trials = 0   # reset to zero if nLogLik decreases
+
+                self.results["n_log_lik"] = result.fun
+                self.results["params"] = result.x
+                self.results["transformed_params"] = transformed_xf
+                self.results["model"] = "Hybrid"
+                self.results["exit flag"] = result.status
+                self.results["output"] = result.message
+
+                _, Q, rpe, pc = self.likelihood(*result.x)
+
+                self.results["run_Q"] = Q
+                self.results["pc"] = pc
+                self.results["rpe"] = rpe
+
+                use_log_log = result.fun
+
+                # cleaner way to write this
+                if not np.isinf(np.log(self.flags["pp_alpha"][result.x[0]])) and not np.isnan(np.log(self.flags["pp_alpha"][result.x[0]])):
+                    use_log_log += np.log(self.flags["pp_alpha"][result.x[0]])
+
+                if not np.isinf(np.log(self.flags["pp_beta"][result.x[1]])) and not np.isnan(np.log(self.flags["pp_beta"][result.x[1]])):
+                    use_log_log += np.log(self.flags["pp_beta"][result.x[1]])
+
+                if not np.isinf(np.log(self.flags["pp_beta_c"][result.x[2]])) and not np.isnan(np.log(self.flags["pp_beta_c"][result.x[2]])):
+                    use_log_log += np.log(self.flags["pp_beta_c"][result.x[2]])
+
+                if not np.isinf(np.log(self.flags["pp_alpha"][result.x[3]])) and not np.isnan(np.log(self.flags["pp_alpha"][result.x[3]])):
+                    use_log_log += np.log(self.flags["pp_alpha"][result.x[3]])
+
+                if not np.isinf(np.log(self.flags["pp_beta"][result.x[4]])) and not np.isnan(np.log(self.flags["pp_beta"][result.x[4]])):
+                    use_log_log += np.log(self.flags["pp_alpha"][result.x[4]])
+
+                self.results["use_log_log"] = use_log_log
+                self.results["AIC"] = 2 * len(result.x) + 2 * use_log_log
+                self.results["BIC"] = 0.5 * len(result.x) * np.log(180) + use_log_log
+
+            else:
+                n_unchanged_trials += 1
+
+        self.display_results()
+
+
+    def display_results(self):
+        """Method that displays the results of the fitting procedure"""
+        return None if self.results["n_log_lik"] is inf  # makes sure that it is printing something
+
+        print(f"---- RESULTS----")
+        for key, value in self.results:
+            print(f"{key}: {value}")
 
 
