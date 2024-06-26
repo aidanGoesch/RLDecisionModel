@@ -4,9 +4,9 @@ from src.loader import Loader
 def main():
     # loader = Loader()
     # print(loader.load_precomputed(1, "A"))
-    simulate_subject(0)
+    simulate_subject(1)
 
-def simulate_subject(subj_idx : int):
+def simulate_subject(subj_idx : int, verbose = False):
     loader = Loader()
 
     subject_data = loader.load_subject(subj_idx)
@@ -15,16 +15,23 @@ def simulate_subject(subj_idx : int):
 
     precomputed_data = loader.load_precomputed(subj_idx, subject_id)
 
-    print(subject_id)
-    print(subject_data)
-    print(precomputed_data)
+    print(f"Fitting subject {subject_id}")
+    if verbose:
+        print(subject_data)
+        print(precomputed_data)
+
     # fit model
+    trial_rec = subject_data["trial_rec"]
+    model = Model(subj_idx, subject_data, precomputed_data, trial_rec)
+    model.fit()
 
 
 # TODO / Notes
-# - change every use of FLAGS to subscript rather than .
-# - change every instance of FLAGS to be self.flags
-
+# - delete unused functions in utils
+# - delete debug statements and comments
+# - make better debug statements
+# - make cleaner UI
+# - add comments explaining code
 
 
 if __name__ == '__main__':
