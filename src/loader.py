@@ -1,3 +1,4 @@
+import pathlib
 import pathlib as pl
 import scipy
 import glob
@@ -9,8 +10,9 @@ class Loader:
 
     def load_subject(self, subj_idx : int):
         """Function that loads transformed subject data"""
-        self.files = glob.glob(f'./data/transformed_Data*.mat')
+        self.files = sorted(glob.glob(f'./data/transformed_Data*.mat'))
 
+        print(self.files)
         subject_info = {}
         complete_path = f'{self.files[subj_idx]}'
 
@@ -45,17 +47,18 @@ class Loader:
 
         return subject_info
 
-    def load_precomputed(self, subj_idx : int, subj_id : str):
+    def load_precomputed(self, subj_idx : int, subj_id : str,):
         """Function that loads precomputed data"""
-        subject_info = {}
-
         self.files = glob.glob(f'./precomputed/precomputed_sub*.mat')
 
-        complete_path = f'{self.files[subj_idx]}'
+        complete_path = f"./precomputed/precomputed_sub{subj_idx + 1}_1.mat"
+
+        print(complete_path)
 
         precomputed_mat = scipy.io.loadmat(complete_path, squeeze_me=True, struct_as_record=False)
 
-        subject_info[subj_id] = {
+        subject_info = {
+            'userID': subj_id,
             'combs': precomputed_mat['combs'],
             'choice_rec': precomputed_mat['choicerec'],
         }
