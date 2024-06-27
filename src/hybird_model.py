@@ -1,9 +1,5 @@
 import numpy as np
-
-from math import inf
-from types import SimpleNamespace
 from scipy.optimize import minimize
-
 
 from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params, format_rwd_val
 
@@ -13,8 +9,13 @@ PARAMS = ["alpha", "beta", "beta_c", "alpha", "beta"]
 NUM_BANDITS = 3
 MAX_TRIALS = 180
 
-# Flags for ctx_hybrid = pp_alpha, pp_beta, and pp_betaC
-# Params = alpha, beta, beta_c, alpha, beta
+# CONSTANT TEST PARAMS
+# alpha_smp = 0.0975
+# beta_smp = 5.570
+# beta_c = 0.2813
+# alpha_td = 0.9575
+# beta_td = 19.2978
+
 
 class Model:
     def __init__(self, subj_idx: int, input_data: dict, precomputed_data: dict, trial_rec : dict,
@@ -36,9 +37,11 @@ class Model:
 
         self.results = {
             "num_params": NUM_PARAMS,
-            "n_log_lik": inf,
+            "n_log_lik": np.inf,
             "file": None   # I don't think we need this for now
         }
+
+        np.seterr(divide='ignore')
 
     def likelihood(self, params):
         """Function that computes the log likelihood of choosing each deck of cards"""
@@ -48,22 +51,13 @@ class Model:
         choice_trials = np.array([(x["choice"] > -1 and x["type"] == 0) for x in self.trial_rec[:MAX_TRIALS]])   # change this later
         choice_trials = np.where(choice_trials)
 
-        # Change these later
-        # print(params)
         alpha_smp = params[0]
         beta_smp = params[1]
         beta_c = params[2]
         alpha_td = params[3]
         beta_td = params[4]
 
-        alpha_smp = 0.0975
-        beta_smp = 5.570
-        beta_c = 0.2813
-        alpha_td = 0.9575
-        beta_td = 19.2978
-
         combs = self.flags["combs"]
-        # print("combs", combs)
         choice_rec = self.flags["choice_rec"]
 
         Q_td = np.array([np.array([0 for x in range(NUM_BANDITS)], dtype=float) for y in range(MAX_TRIALS)])
@@ -96,9 +90,6 @@ class Model:
                 else:
                     b_prev_idxs = combs[i][b] - 1
 
-                # print('Aaaaaaa', rwdval, choice_rec[b_prev_idxs][1].T.tolist())
-                # print("AAAAA", choice_rec[b_prev_idxs, 1].T.tolist())
-
                 rwdval[b] = choice_rec[b_prev_idxs, 1].T.tolist()
                 pval[b] = np.array([alpha_smp * ((1 - alpha_smp) ** (i - b_prev_idxs))])
 
@@ -108,28 +99,16 @@ class Model:
 
                 pval[b] = pval[b] / np.sum(pval[b])
 
-
-                # rwdval = format_rwd_val(rwdval)
-                # print("rwdval:", rwdval)
                 if isinstance(rwdval[b], list):
                     rwdval[b] = sign(rwdval[b])
                 else:
                     rwdval[b] = [sign(rwdval[b])]
-                # print("rwdval after:", rwdval)
-                # if isinstance(rwdval[b], int):
-                #     rwdval[b] = [sign(rwdval[b])]
-                # else:
-                #     rwdval[b] = sign(rwdval[b])
-
-            # rwdval = [[x] for x in np.array(rwdval).flatten()]
 
             Q_td[i] = run_Q   # save the record of Q values used to make the TD-model based choice
             rpe_td[i] = reward - run_Q[chosen_bandit - 1]
             run_Q[chosen_bandit - 1] += alpha_td * rpe_td[i]
 
             non_chosen_bandits = np.where(np.array(range(1, NUM_BANDITS + 1)) != chosen_bandit)[0]  # find all of the indices that are not being chosen
-
-            # print(non_chosen_bandits, np.array(range(1, NUM_BANDITS + 1)) != chosen_bandit)
 
             # make behavior the same as matlab
             other_bandit_1 = non_chosen_bandits[0] + 1
@@ -138,8 +117,6 @@ class Model:
             I1 = int(other_bandit_1 == prev_chosen_bandit)
             I2 = int(other_bandit_2 == prev_chosen_bandit)
             Ic = int(chosen_bandit == prev_chosen_bandit)
-
-            # print(I1, I2, Ic)
 
             def compute_rvmat1(x, bandit):
                 term1 = beta_c * (I1 - Ic)
@@ -156,7 +133,6 @@ class Model:
             rvmat1 = [compute_rvmat1(x, other_bandit_1 - 1) for x in rwdval[chosen_bandit - 1]]
             rvmat2 = [compute_rvmat2(x, other_bandit_2 - 1) for x in rwdval[chosen_bandit - 1]]
 
-            # print("rvmat1", rvmat1, "F", rwdval[chosen_bandit - 1])
             try:
                 rvmat1 = np.concatenate(rvmat1)
                 rvmat2 = np.concatenate(rvmat2)
@@ -173,56 +149,40 @@ class Model:
                 reshaped_sum = np.add(slice1, np.vstack(slice2)).reshape(1, -1)
                 return reshaped_sum
 
-            if i == 6:
-                pass
-
             rvmat = np.array([compute_rvmat(x) for x in range(j)]).flatten()
-            # print("rvmat:", rvmat)
-            # rvmat = np.vstack(rvmat)
-
-            # pmat1 = np.concatenate([x * np.array(pval[other_bandit_2 - 1]).reshape(-1, 1) for x in pval[other_bandit_1 - 1]])
-            # pmat2 = np.concatenate([x * pmat1.reshape(-1, 1) for x in pval[chosen_bandit - 1]]).flatten()
 
             pmat1 = np.array([x * np.array(pval[other_bandit_2 - 1]).T for x in np.array(pval[other_bandit_1 - 1])], dtype=float)
             pmat2 = np.array([x * pmat1.T for x in pval[chosen_bandit - 1]], dtype=float).T.flatten()
 
             softmax_term = 1. / (1. + rvmat)
 
-            # print(pmat2, softmax_term)
-
-            pc[i] = max(np.sum(pmat2 * softmax_term.T), 0)
-            pass
-            # try:
-
-            #         # this might cause problems -- change to 1e-32
-            # except ValueError:
-            #     try:
-            #         pmat2 = np.array([x * pmat1 for x in pval[chosen_bandit - 1]], dtype=float).T.flatten()
-            #         pc[i] = max(np.sum(pmat2 * softmax_term), 0)  # this might cause problems -- change to 1e-32
-            #     except ValueError as e:
-            #         pass
-            #         print(e)
-                    # print(softmax_term)
-                    # print(pmat2)
-                    # quit()
+            pc[i] = max(np.sum(pmat2 * softmax_term.T), 0.000000000000000000000000001)
 
         n_log_likelihood = -sum(np.log(pc[choice_trials]))
 
         n_log_likelihood -= np.log(self.flags["pp_alpha"](alpha_smp))
         n_log_likelihood -= np.log(self.flags["pp_beta"](beta_smp))
-        n_log_likelihood -= np.log(self.flags["pp_beta_C"](beta_c))
+        n_log_likelihood -= np.log(self.flags["pp_beta_c"](beta_c))
         n_log_likelihood -= np.log(self.flags["pp_alpha"](alpha_td))
         n_log_likelihood -= np.log(self.flags["pp_beta"](alpha_td))
+
+        print("likelihood:", n_log_likelihood)
 
         return n_log_likelihood, Q_td, rpe_td, pc
 
 
     def fit(self):
-        # print(f"---- FITTING SUBJECT {self.subj_idx}----")
-
         start, n_unchanged_trials = 0, 0
 
-        f = lambda x : self.likelihood( params=(transform_params(x, PARAMS)) )[0]
+        def f(x):
+            """Function to be minimized"""
+            tmp = (transform_params(x, PARAMS, minimizing=True))
+
+            if self.very_verbose:
+                print("x:", x)
+                print("t:", tmp)
+
+            return self.likelihood(params=tmp)[0]
 
         while n_unchanged_trials < ITERATIONS:
             print(n_unchanged_trials)
@@ -234,28 +194,27 @@ class Model:
             # initial parameters
             transformed_x_0 = transform_params(x_0, PARAMS)
 
-            options = {"disp": False}
+            options = {"disp": False, 'gtol': 0.5, 'maxiter': 1000}
 
-            print("x_0:", x_0, "transformed:", transformed_x_0)
+            result = minimize(fun=f, x0=transformed_x_0, options=options)
 
-            result = minimize(fun=f, x0=transformed_x_0, options=options, method="BFGS")
-
-            transformed_xf = transform_params(result.x, PARAMS)
+            transformed_xf = transform_params(result.x, PARAMS, minimizing=True)
 
 
             if self.verbose:
-                print(f"> valid_x0={x_0} valid_xf={transformed_xf}  (raw_x0={transformed_x_0}  raw_xf={result.x}")
+                print(f"valid_x0={x_0} valid_xf={transformed_xf}\nraw_x0={transformed_x_0}  raw_xf={result.x}")
 
             if not result.success:  # this might be wrong
                 print("Failed to converge")
                 print(result.message)
                 continue
             elif self.very_verbose:
-                print("DEBUG")
+                print("n_log_likelihood:", result.fun)
 
             if start == 1 or result.fun < self.results["n_log_lik"]:
                 if self.verbose:
-                    print("DEBUG")
+                    print(f"old n_log_likelihood: {self.results["n_log_lik"]}")
+                    print(f"new n_log_likelihood: {result.fun}")
 
                 n_unchanged_trials = 0   # reset to zero if nLogLik decreases
 
@@ -273,6 +232,7 @@ class Model:
                 self.results["rpe"] = rpe
 
                 use_log_log = result.fun
+                print(use_log_log)
 
                 # cleaner way to write this
                 if not np.isinf(np.log(self.flags["pp_alpha"](result.x[0]))) and not np.isnan(np.log(self.flags["pp_alpha"](result.x[0]))):
@@ -281,16 +241,16 @@ class Model:
                 if not np.isinf(np.log(self.flags["pp_beta"](result.x[1]))) and not np.isnan(np.log(self.flags["pp_beta"](result.x[1]))):
                     use_log_log += np.log(self.flags["pp_beta"](result.x[1]))
 
-                if not np.isinf(np.log(self.flags["pp_beta_C"](result.x[2]))) and not np.isnan(np.log(self.flags["pp_beta_C"](result.x[2]))):
-                    use_log_log += np.log(self.flags["pp_beta_C"](result.x[2]))
+                if not np.isinf(np.log(self.flags["pp_beta_c"](result.x[2]))) and not np.isnan(np.log(self.flags["pp_beta_c"](result.x[2]))):
+                    use_log_log += np.log(self.flags["pp_beta_c"](result.x[2]))
 
                 if not np.isinf(np.log(self.flags["pp_alpha"](result.x[3]))) and not np.isnan(np.log(self.flags["pp_alpha"](result.x[3]))):
-                    use_log_log += np.log(self.flags["pp_alpha"][result.x[3]])
+                    use_log_log += np.log(self.flags["pp_alpha"](result.x[3]))
 
                 if not np.isinf(np.log(self.flags["pp_beta"](result.x[4]))) and not np.isnan(np.log(self.flags["pp_beta"](result.x[4]))):
-                    use_log_log += np.log(self.flags["pp_alpha"](result.x[4]))
+                    use_log_log += np.log(self.flags["pp_beta"](result.x[4]))
 
-                self.results["use_log_log"] = use_log_log
+                self.results["use_log_lik"] = use_log_log
                 self.results["AIC"] = 2 * len(result.x) + 2 * use_log_log
                 self.results["BIC"] = 0.5 * len(result.x) * np.log(180) + use_log_log
 
@@ -302,11 +262,11 @@ class Model:
 
     def display_results(self):
         """Method that displays the results of the fitting procedure"""
-        if self.results["n_log_lik"] is inf:  # makes sure that it is printing something
+        if self.results["n_log_lik"] is np.inf:  # makes sure that it is printing something
             return
 
         print(f"---- RESULTS----")
         for key, value in self.results.items():
-            print(f"{key}: {value}")
+            print(f"{key}:{' ' * (25 - len(key))}{value}")
 
 
