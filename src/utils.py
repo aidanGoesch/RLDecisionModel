@@ -21,7 +21,7 @@ low_bound, up_bound = PARAM_CONSTANTS["beta"][0]
 FLAGS["pp_beta"] = lambda x: norm.pdf((x - low_bound) / (up_bound - low_bound), 0, 10)
 
 low_bound, up_bound = PARAM_CONSTANTS["beta_c"][0]
-FLAGS["pp_beta_C"] = lambda x: norm.pdf((x - low_bound) / (up_bound - low_bound), 0, 10)
+FLAGS["pp_beta_c"] = lambda x: norm.pdf((x - low_bound) / (up_bound - low_bound), 0, 10)
 
 
 # helper functions
@@ -53,13 +53,15 @@ def format_rwd_val(nested_list):
         return nested_list
 
 
-def transform_params(params, param_names):
+def transform_params(params : list, param_names : list, minimizing: bool = False):
 
     transformed_params = params[::]
     for i in range(len(params)):
         param_range = PARAM_CONSTANTS[param_names[i]][0]
-
-        transformed_params[i] = -np.log(-1 + (param_range[1] - param_range[0]) / (params[i]-param_range[0]))
+        if minimizing:  # min + [max-min]./[1+exp(-x)]
+            transformed_params[i] = param_range[0] + (param_range[1] - param_range[0]) / (1 + np.exp(-params[i]))
+        else:
+            transformed_params[i] = -np.log(-1 + (param_range[1] - param_range[0]) / (params[i]-param_range[0]))
 
     return transformed_params
 
@@ -67,6 +69,13 @@ def transform_params(params, param_names):
 
 
 if __name__ == "__main__":
-    print(format_rwd_val([[1], 1, [[1], 1, [1]]]))
-    print(sign([0, 1]))
-    print(list(map(sign, [[0], 1])))
+    # print(format_rwd_val([[1], 1, [[1], 1, [1]]]))
+    # print(sign([0, 1]))
+    # print(list(map(sign, [[0], 1])))
+    x = [0.6469239473475671, -1.3404036392300163, 3.3682370745009322, 0.07216152970584128, 0.4192123986941138]
+    x = transform_params(x, ["alpha", "beta", "beta_c", "alpha", "beta"], minimizing=True)
+
+    print(x)
+    # print([type(i) for i in x])
+
+    print(FLAGS["pp_alpha"](1.4247013627734044))
