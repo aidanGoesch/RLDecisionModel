@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 
-from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params, format_rwd_val
+from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params
 
 NUM_PARAMS = 5
 PARAMS = ["alpha", "beta", "beta_c", "alpha", "beta"]
@@ -18,12 +18,10 @@ MAX_TRIALS = 180
 
 
 class Model:
-    def __init__(self, subj_idx: int, input_data: dict, precomputed_data: dict, trial_rec : dict,
-                 verbose : bool = True, very_verbose : bool = False):
-        self.input_data = input_data
-        self.precomputed = precomputed_data
-        self.trial_rec = trial_rec
+    def __init__(self, subj_idx: int, precomputed_data: dict, trial_rec : dict,
+                 verbose : bool = False, very_verbose : bool = False):
         self.subj_idx = subj_idx
+        self.trial_rec = trial_rec
         self.flags = FLAGS    # load defaults
 
         self.flags["resetQ"] = False
@@ -38,7 +36,6 @@ class Model:
         self.results = {
             "num_params": NUM_PARAMS,
             "n_log_lik": np.inf,
-            "file": None   # I don't think we need this for now
         }
 
         np.seterr(divide='ignore')
@@ -69,7 +66,6 @@ class Model:
         pval = [0 for i in range(NUM_BANDITS)]
 
         for i in range(MAX_TRIALS):
-            # print("i", i)
             chosen_bandit = self.trial_rec[i]["choice"] + 1
             reward = self.trial_rec[i]["rwdval"]
 
@@ -82,7 +78,6 @@ class Model:
                 continue
 
             for b in range(NUM_BANDITS):
-                # print(combs[i][b])
                 if not isinstance(combs[i][b], int):  # emulate matlab reshape func behavior - make compatible with int
                     transposed_arr = combs[i][b].T
                     transposed_arr = transposed_arr - 1
@@ -108,9 +103,10 @@ class Model:
             rpe_td[i] = reward - run_Q[chosen_bandit - 1]
             run_Q[chosen_bandit - 1] += alpha_td * rpe_td[i]
 
-            non_chosen_bandits = np.where(np.array(range(1, NUM_BANDITS + 1)) != chosen_bandit)[0]  # find all of the indices that are not being chosen
+            # find all of the indices that are not being chosen
+            non_chosen_bandits = np.where(np.array(range(1, NUM_BANDITS + 1)) != chosen_bandit)[0]
 
-            # make behavior the same as matlab
+            # make behavior the same as matlab - add 1 to index
             other_bandit_1 = non_chosen_bandits[0] + 1
             other_bandit_2 = non_chosen_bandits[1] + 1
 
@@ -118,20 +114,14 @@ class Model:
             I2 = int(other_bandit_2 == prev_chosen_bandit)
             Ic = int(chosen_bandit == prev_chosen_bandit)
 
-            def compute_rvmat1(x, bandit):
-                term1 = beta_c * (I1 - Ic)
+            def compute_rvmat1(x, bandit, I):
+                term1 = beta_c * (I - Ic)
                 term2 = beta_td * (run_Q[chosen_bandit - 1] - run_Q[bandit])
                 term3 = beta_smp * (x - np.array(rwdval[bandit]).flatten())
                 return np.exp(term1 - term2 - term3)
 
-            def compute_rvmat2(x, bandit):
-                term1 = beta_c * (I2 - Ic)
-                term2 = beta_td * (run_Q[chosen_bandit - 1] - run_Q[bandit])
-                term3 = beta_smp * (x - np.array(rwdval[bandit]).flatten())
-                return np.exp(term1 - term2 - term3)
-
-            rvmat1 = [compute_rvmat1(x, other_bandit_1 - 1) for x in rwdval[chosen_bandit - 1]]
-            rvmat2 = [compute_rvmat2(x, other_bandit_2 - 1) for x in rwdval[chosen_bandit - 1]]
+            rvmat1 = [compute_rvmat1(x, other_bandit_1 - 1, I1) for x in rwdval[chosen_bandit - 1]]
+            rvmat2 = [compute_rvmat1(x, other_bandit_2 - 1, I2) for x in rwdval[chosen_bandit - 1]]
 
             try:
                 rvmat1 = np.concatenate(rvmat1)
@@ -166,7 +156,8 @@ class Model:
         n_log_likelihood -= np.log(self.flags["pp_alpha"](alpha_td))
         n_log_likelihood -= np.log(self.flags["pp_beta"](alpha_td))
 
-        print("likelihood:", n_log_likelihood)
+        if self.verbose:
+            print("iteration likelihood:", n_log_likelihood)
 
         return n_log_likelihood, Q_td, rpe_td, pc
 
@@ -185,7 +176,7 @@ class Model:
             return self.likelihood(params=tmp)[0]
 
         while n_unchanged_trials < ITERATIONS:
-            print(n_unchanged_trials)
+            print(f"Trial {n_unchanged_trials + 1} started")
             start += 1
 
             # pick random starting values for the params

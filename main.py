@@ -9,10 +9,12 @@ def main():
 def simulate_subject(subj_idx : int, verbose = False):
     loader = Loader()
 
+    # load in transformed participant specific data
     subject_data = loader.load_subject(subj_idx)
 
     subject_id = subject_data["userID"]
 
+    # load in precomputed participant data
     precomputed_data = loader.load_precomputed(subj_idx, subject_id)
 
     print(f"Fitting subject {subject_id}")
@@ -20,17 +22,14 @@ def simulate_subject(subj_idx : int, verbose = False):
         print(subject_data)
         print(precomputed_data)
 
-    # fit model
+    # Create and fit model
     trial_rec = subject_data["trial_rec"]
-    model = Model(subj_idx, subject_data, precomputed_data, trial_rec)
+    model = Model(subj_idx, precomputed_data, trial_rec, True, False)
     model.fit()
 
 
 # TODO / Notes
-# - delete unused functions in utils
-# - delete debug statements and comments
 # - make better debug statements
-# - make cleaner UI
 # - add comments explaining code
 
 

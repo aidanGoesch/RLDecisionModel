@@ -33,24 +33,7 @@ def sign(x: int | list):
         else:
             return math.copysign(1, x) if x != 0 else 0
 
-    return format_rwd_val(foo(x))
-
-
-def format_rwd_val(nested_list):
-    flattened = []
-
-    def flatten(l):
-        for item in l:
-            if isinstance(item, list):
-                flatten(item)
-            else:
-                flattened.append(item)
-
-    if isinstance(nested_list, list):
-        flatten(nested_list)
-        return [[elem] for elem in flattened]
-    else:
-        return nested_list
+    return foo(x)
 
 
 def transform_params(params : list, param_names : list, minimizing: bool = False):
