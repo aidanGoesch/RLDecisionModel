@@ -22,7 +22,9 @@ class Model:
                  verbose : bool = False, very_verbose : bool = False):
         self.subj_idx = subj_idx
         self.trial_rec = trial_rec
-        self.flags = FLAGS    # load defaults
+
+        # load defaults
+        self.flags = FLAGS
 
         self.flags["resetQ"] = False
         self.flags["num_samples"] = 1
@@ -38,10 +40,12 @@ class Model:
             "n_log_lik": np.inf,
         }
 
+        # stops unnecessary error warnings during running
         np.seterr(divide='ignore')
 
     def likelihood(self, params):
-        """Function that computes the log likelihood of choosing each deck of cards"""
+        """Function that computes the log likelihood of choosing each deck of cards
+        RETURNS: n_log_likelihood : list[list], Q_td : list[list], rpe_td : list[list], pc : list[list]"""
         num_samples = self.flags["num_samples"]
 
         # initialize choice trials
@@ -103,7 +107,7 @@ class Model:
             rpe_td[i] = reward - run_Q[chosen_bandit - 1]
             run_Q[chosen_bandit - 1] += alpha_td * rpe_td[i]
 
-            # find all of the indices that are not being chosen
+            # find all indices that are not being chosen
             non_chosen_bandits = np.where(np.array(range(1, NUM_BANDITS + 1)) != chosen_bandit)[0]
 
             # make behavior the same as matlab - add 1 to index
@@ -163,10 +167,11 @@ class Model:
 
 
     def fit(self):
+        """Fit the model to the data passed into the constructor"""
         start, n_unchanged_trials = 0, 0
 
         def f(x):
-            """Function to be minimized"""
+            """Function to be minimized by scipy.minimize"""
             tmp = (transform_params(x, PARAMS, minimizing=True))
 
             if self.very_verbose:
@@ -185,6 +190,7 @@ class Model:
             # initial parameters
             transformed_x_0 = transform_params(x_0, PARAMS)
 
+            # options for minimization function - gtol determines how precise the minimization is
             options = {"disp": False, 'gtol': 0.5, 'maxiter': 1000}
 
             result = minimize(fun=f, x0=transformed_x_0, options=options)
@@ -195,7 +201,7 @@ class Model:
             if self.verbose:
                 print(f"valid_x0={x_0} valid_xf={transformed_xf}\nraw_x0={transformed_x_0}  raw_xf={result.x}")
 
-            if not result.success:  # this might be wrong
+            if not result.success:
                 print("Failed to converge")
                 print(result.message)
                 continue
@@ -209,6 +215,7 @@ class Model:
 
                 n_unchanged_trials = 0   # reset to zero if nLogLik decreases
 
+                # save results into attribute
                 self.results["n_log_lik"] = result.fun
                 self.results["params"] = result.x
                 self.results["transformed_params"] = transformed_xf
@@ -223,9 +230,7 @@ class Model:
                 self.results["rpe"] = rpe
 
                 use_log_log = result.fun
-                print(use_log_log)
 
-                # cleaner way to write this
                 if not np.isinf(np.log(self.flags["pp_alpha"](result.x[0]))) and not np.isnan(np.log(self.flags["pp_alpha"](result.x[0]))):
                     use_log_log += np.log(self.flags["pp_alpha"](result.x[0]))
 
@@ -253,7 +258,7 @@ class Model:
 
     def display_results(self):
         """Method that displays the results of the fitting procedure"""
-        if self.results["n_log_lik"] is np.inf:  # makes sure that it is printing something
+        if self.results["n_log_lik"] is np.inf:  # makes sure that the output is valid
             return
 
         print(f"---- RESULTS----")

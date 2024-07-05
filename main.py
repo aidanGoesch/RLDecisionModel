@@ -2,11 +2,12 @@ from src.hybird_model import Model
 from src.loader import Loader
 
 def main():
-    # loader = Loader()
-    # print(loader.load_precomputed(1, "A"))
+    # put in for loop to simulate every subject - too slow otherwise
     simulate_subject(1)
 
 def simulate_subject(subj_idx : int, verbose = False):
+    """Function that simulates a specific subject that is determined by the
+    subject index passed as a parameter."""
     loader = Loader()
 
     # load in transformed participant specific data
@@ -19,8 +20,8 @@ def simulate_subject(subj_idx : int, verbose = False):
 
     print(f"Fitting subject {subject_id}")
     if verbose:
-        print(subject_data)
-        print(precomputed_data)
+        print(f"Subject Data: {subject_data}")
+        print(f"Precomputed Data: {precomputed_data}")
 
     # Create and fit model
     trial_rec = subject_data["trial_rec"]
@@ -28,9 +29,9 @@ def simulate_subject(subj_idx : int, verbose = False):
     model.fit()
 
 
-# TODO / Notes
-# - make better debug statements
-# - add comments explaining code
+# TODO / Next Steps
+# - Make a writer - class that can write the data to output files
+# - add other models
 
 
 if __name__ == '__main__':

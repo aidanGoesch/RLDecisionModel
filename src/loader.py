@@ -1,5 +1,3 @@
-import pathlib
-import pathlib as pl
 import scipy
 import glob
 
@@ -10,17 +8,15 @@ class Loader:
 
     def load_subject(self, subj_idx : int):
         """Function that loads transformed subject data"""
+        # get all of the files from the directory in order
         self.files = sorted(glob.glob(f'./data/transformed_Data*.mat'))
 
-        print(self.files)
-        subject_info = {}
         complete_path = f'{self.files[subj_idx]}'
 
-        subject_id = complete_path.split('_')[-1].split('.')[0]
+        # subject_id = complete_path.split('_')[-1].split('.')[0]
 
         subject_mat = scipy.io.loadmat(complete_path, squeeze_me=True, struct_as_record=False)
-        # print(subject_mat)
-        # print(dir(subject_mat['trialrec'][0]))
+
         subject_info = {
             'userID': subject_mat['userID'],
             'age': subject_mat['age'],

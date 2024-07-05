@@ -26,7 +26,7 @@ FLAGS["pp_beta_c"] = lambda x: norm.pdf((x - low_bound) / (up_bound - low_bound)
 
 # helper functions
 def sign(x: int | list):
-    """implementation of the MatLab sign function"""
+    """Implementation of the MatLab sign function"""
     def foo(i):
         if isinstance(i, list):
             return [sign(i) for i in x]
@@ -37,6 +37,7 @@ def sign(x: int | list):
 
 
 def transform_params(params : list, param_names : list, minimizing: bool = False):
+    """Function that normalizes the randomly generated params."""
 
     transformed_params = params[::]
     for i in range(len(params)):
@@ -49,12 +50,7 @@ def transform_params(params : list, param_names : list, minimizing: bool = False
     return transformed_params
 
 
-
-
 if __name__ == "__main__":
-    # print(format_rwd_val([[1], 1, [[1], 1, [1]]]))
-    # print(sign([0, 1]))
-    # print(list(map(sign, [[0], 1])))
     x = [0.6469239473475671, -1.3404036392300163, 3.3682370745009322, 0.07216152970584128, 0.4192123986941138]
     x = transform_params(x, ["alpha", "beta", "beta_c", "alpha", "beta"], minimizing=True)
 
