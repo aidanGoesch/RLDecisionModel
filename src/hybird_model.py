@@ -17,7 +17,7 @@ MAX_TRIALS = 180
 # beta_td = 19.2978
 
 
-class Model:
+class HybridModel:
     def __init__(self, subj_idx: int, precomputed_data: dict, trial_rec : dict,
                  verbose : bool = False, very_verbose : bool = False):
         self.subj_idx = subj_idx
