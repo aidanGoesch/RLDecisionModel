@@ -89,7 +89,7 @@ class SamplingModel(Model):
             Ic = int(chosen_bandit == prev_chosen_bandit)
 
             def compute_rvmat1(x, bandit, I):
-                term1 = beta_c * I - Ic
+                term1 = beta_c * (I - Ic)
                 term2 = beta * (x - rwdval[bandit]).T)
 
                 return np.exp(term1 - term2)
