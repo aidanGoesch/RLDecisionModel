@@ -37,6 +37,8 @@ class SamplingModel(Model):
 
 
     def likelihood(self, params):
+        """Function that computes the log likelihood of choosing each deck of cards
+        RETURNS: n_log_likelihood : list[list], Q_td : list[list], rpe_td : list[list], pc : list[list]"""
 
         # select a valid choice trial
         choice_trials = next(x for x in self.trial_rec[0] if x.choice > -1 and x.type == 0)
@@ -128,6 +130,8 @@ class SamplingModel(Model):
         n_log_likelihood -= np.log(self.flags["pp_beta"](beta))
         n_log_likelihood -= np.log(self.flags["pp_beta_c"](beta_c))
 
+
+#TODO: Debug this model
 
 if __name__ == "__main__":
     pass

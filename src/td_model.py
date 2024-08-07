@@ -1,8 +1,8 @@
+import string
 import numpy as np
 
 from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params
 from src.model import Model
-
 
 NUM_PARAMS = 3
 PARAMS = ["alpha", "beta", "beta_p"]
@@ -35,5 +35,19 @@ class TDModel(Model):
         self.num_samples = self.trial_rec["num_samples"]
 
     def likelihood(self, params):
-        pass
+        """Function that computes the log likelihood of choosing each deck of cards
+                RETURNS: n_log_likelihood : list[list], Q_td : list[list], rpe_td : list[list], pc : list[list]"""
+        choice_trials = next(x for x in self.trial_rec[0] if x.choice > -1 and x.type == 0)
 
+        alpha = params[0]
+        beta = params[1]
+        beta_c = params[2]
+
+        reset_trial = self.flags.reset_Q
+        if self.flags.reset_Q.isnumeric():
+            reset_trial = self.flags.reset_Q
+
+        Q = np.array([np.array([0 for _ in range(NUM_BANDITS)], dtype=float) for _ in range(MAX_TRIALS)])
+        pc = np.array([0 for _ in range(MAX_TRIALS)], dtype=float)
+        rpe = np.array([0 for _ in range(MAX_TRIALS)], dtype=float)
+        run_Q = np.array([0 for i in range(NUM_BANDITS)], dtype=float)
