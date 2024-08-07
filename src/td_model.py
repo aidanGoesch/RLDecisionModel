@@ -50,4 +50,43 @@ class TDModel(Model):
         Q = np.array([np.array([0 for _ in range(NUM_BANDITS)], dtype=float) for _ in range(MAX_TRIALS)])
         pc = np.array([0 for _ in range(MAX_TRIALS)], dtype=float)
         rpe = np.array([0 for _ in range(MAX_TRIALS)], dtype=float)
-        run_Q = np.array([0 for i in range(NUM_BANDITS)], dtype=float)
+        run_Q = np.array([0 for _ in range(NUM_BANDITS)], dtype=float)
+
+        for trial_idx in range(MAX_TRIALS):
+            Q[:, trial_idx] = run_Q
+
+            chosen_bandit = self.trial_rec[trial_idx].choice + 1
+            reward = self.trial_rec[trial_idx].rwd_val
+
+            if chosen_bandit == 0: continue  # Invalid trial. Skip it.
+
+            if trial_idx > 0:
+                prev_chosen_bandit = self.trial_rec[trial_idx - 1].choice + 1
+            else:
+                prev_chosen_bandit = -1
+
+            non_chosen_bandits = np.where(np.array(range(1, NUM_BANDITS + 1)) != chosen_bandit)[0]
+
+            # make behavior the same as matlab - add 1 to index
+            other_bandit_1 = non_chosen_bandits[0] + 1
+            other_bandit_2 = non_chosen_bandits[1] + 1
+
+            I1 = int(other_bandit_1 == prev_chosen_bandit)
+            I2 = int(other_bandit_2 == prev_chosen_bandit)
+            Ic = int(chosen_bandit == prev_chosen_bandit)
+
+            term1 = np.exp(beta_c * (I1 - Ic) + beta * (run_Q[other_bandit_1] - run_Q[chosen_bandit]))
+            term2 = np.exp(beta_c * (I2 - Ic) + beta * (run_Q[other_bandit_2] - run_Q[chosen_bandit]))
+
+            pc[trial_idx] = 1 / (1 + term1 + term2)
+
+            rpe[trial_idx] = reward - run_Q[chosen_bandit]
+
+            run_Q[chosen_bandit] += alpha * rpe[trial_idx]
+
+        n_log_likelihood = -sum(np.log(pc[choice_trials]))
+
+        n_log_likelihood -= np.log(self.flags["pp_alpha"](alpha))
+        n_log_likelihood -= np.log(self.flags["pp_beta"](beta))
+        n_log_likelihood -= np.log(self.flags["pp_beta_c"](beta_c))
+
