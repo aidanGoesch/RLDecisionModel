@@ -6,7 +6,7 @@ from src.model import Model
 # alpha - learning rate; beta - softmax temp; beta_p - perseveration
 
 NUM_PARAMS = 3
-PARAMS = ["alpha", "beta", "beta_p"]
+PARAMS = ["alpha", "beta", "beta_c"]
 
 NUM_BANDITS = 3
 MAX_TRIALS = 180
@@ -33,19 +33,27 @@ class SamplingModel(Model):
         # load defaults
         self.flags = FLAGS
 
-        self.num_samples = self.trial_rec["num_samples"]
+        self.flags["choice_rec"] = precomputed_data["choice_rec"]
+        self.flags["combs"] = precomputed_data["combs"]
 
+        self.num_samples = 1  # hard coded from fit_model.m
 
     def likelihood(self, params):
         """Function that computes the log likelihood of choosing each deck of cards
-        RETURNS: n_log_likelihood : list[list], Q_td : list[list], rpe_td : list[list], pc : list[list]"""
+        RETURNS: n_log_likelihood : list[list], Q : list[list], rpe : list[list], pc : list[list]"""
 
         # select a valid choice trial
-        choice_trials = next(x for x in self.trial_rec[0] if x.choice > -1 and x.type == 0)
+        choice_trials = np.array(
+            [(x["choice"] > -1 and x["type"] == 0) for x in self.trial_rec[:MAX_TRIALS]])  # change this later
+        choice_trials = np.where(choice_trials)
 
         alpha = params[0]
         beta = params[1]
         beta_c = params[2]
+
+        alpha = 0.957166948242946
+        beta = 9.707512974456824
+        beta_c = 1.801682813332801
 
         combs = self.flags["combs"]
         choice_rec = self.flags["choice_rec"]
@@ -61,24 +69,36 @@ class SamplingModel(Model):
         pc[0] = 0.5
 
         for trial_idx in range(1, MAX_TRIALS):
-            chosen_bandit = self.trial_rec[trial_idx].choice + 1
-            prev_chosen_bandit = self.trial_rec[trial_idx - 1].choice + 1
+            chosen_bandit = self.trial_rec[trial_idx]["choice"] + 1
+            prev_chosen_bandit = self.trial_rec[trial_idx - 1]["choice"] + 1
 
             if chosen_bandit == 0: continue  # Invalid trial. Skip it.
 
             for b in range(NUM_BANDITS):
-                b_prev_idx = np.array(combs[trial_idx][b]).T.reshape(1)  # reshape specific location in combs to be a row vector
-                rwdval[b] = [choice_rec[b_prev_idx, 1].T]  # make sure this is an ndarray
+                # b_prev_idx = np.array(combs[trial_idx][b]).T.reshape(1)  # reshape specific location in combs to be a row vector
 
-                if len(rwdval[b]) == 0:
+                if not isinstance(combs[trial_idx][b], int):  # emulate matlab reshape func behavior - make compatible with int
+                    transposed_arr = combs[trial_idx][b].T
+                    transposed_arr = transposed_arr - 1
+                    b_prev_idx = transposed_arr.reshape(1, -1)
+                else:
+                    b_prev_idx = combs[trial_idx][b] - 1
+
+                rwdval[b] = choice_rec[b_prev_idx, 1].T.tolist()  # make sure this is an ndarray
+
+                if not isinstance(rwdval[b], int) and len(rwdval[b]) == 0:
                     rwdval[b] = [0]
                     pval[b] = [1]
 
                 pval[b] /= np.sum(rwdval[b])
-                rwdval[b] = sign(rwdval[b])
+                # rwdval[b] = sign(rwdval[b])
+                if isinstance(rwdval[b], list):
+                    rwdval[b] = sign(rwdval[b])
+                else:
+                    rwdval[b] = [sign(rwdval[b])]
 
-                Q[trial_idx][b] = rwdval[b] * pval[b]
-                rpe[trial_idx] = self.trial_rec[trial_idx].rwdval - Q[trial_idx][chosen_bandit]
+                Q[trial_idx][b] = np.sum(rwdval[b] * pval[b])
+                rpe[trial_idx] = self.trial_rec[trial_idx]["rwdval"] - Q[trial_idx][chosen_bandit - 1]
 
             non_chosen_bandits = np.where(np.array(range(1, NUM_BANDITS + 1)) != chosen_bandit)[0]
 
@@ -92,7 +112,7 @@ class SamplingModel(Model):
 
             def compute_rvmat1(x, bandit, I):
                 term1 = beta_c * (I - Ic)
-                term2 = beta * (x - rwdval[bandit]).T
+                term2 = beta * (x - np.array(rwdval[bandit]).flatten()).T
 
                 return np.exp(term1 - term2)
 
@@ -129,6 +149,11 @@ class SamplingModel(Model):
         n_log_likelihood -= np.log(self.flags["pp_alpha"](alpha))
         n_log_likelihood -= np.log(self.flags["pp_beta"](beta))
         n_log_likelihood -= np.log(self.flags["pp_beta_c"](beta_c))
+
+        if self.verbose:
+            print("iteration likelihood:", n_log_likelihood)
+
+        return n_log_likelihood, Q, rpe, pc
 
 
 #TODO: Debug this model
