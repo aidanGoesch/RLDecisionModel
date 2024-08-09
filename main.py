@@ -1,5 +1,6 @@
 from src.hybird_model import HybridModel
 from src.sampling_model import SamplingModel
+from src.td_model import TDModel
 from src.loader import Loader
 
 def main():
@@ -26,7 +27,8 @@ def simulate_subject(subj_idx : int, verbose = False):
 
     # Create and fit model
     trial_rec = subject_data["trial_rec"]
-    model = SamplingModel(subj_idx, precomputed_data, trial_rec, True, False)
+    # Change the model here
+    model = TDModel(subj_idx, precomputed_data, trial_rec, True, False)
     model.fit()
 
 
