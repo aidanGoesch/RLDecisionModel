@@ -6,8 +6,10 @@ from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params
 NUM_BANDITS = 3
 MAX_TRIALS = 180
 
+MODEL_TYPES = ["sample", "td", "hybrid"]
+
 class Model:
-    def __init__(self):
+    def __init__(self, model_type : str):
         # stops unnecessary error warnings during running
         np.seterr(divide='ignore')
 
@@ -19,6 +21,11 @@ class Model:
 
         self.results = None
         self.flags = None
+
+        if model_type in MODEL_TYPES:
+            self.model_type = model_type
+        else:
+            raise ValueError(f"Invalid model type: {model_type}")
 
 
     def likelihood(self, params):
@@ -100,13 +107,14 @@ class Model:
                         np.log(self.flags["pp_beta_c"](result.x[2]))):
                     use_log_log += np.log(self.flags["pp_beta_c"](result.x[2]))
 
-                if not np.isinf(np.log(self.flags["pp_alpha"](result.x[3]))) and not np.isnan(
-                        np.log(self.flags["pp_alpha"](result.x[3]))):
-                    use_log_log += np.log(self.flags["pp_alpha"](result.x[3]))
+                if self.model_type == "hybrid":
+                    if not np.isinf(np.log(self.flags["pp_alpha"](result.x[3]))) and not np.isnan(
+                            np.log(self.flags["pp_alpha"](result.x[3]))):
+                        use_log_log += np.log(self.flags["pp_alpha"](result.x[3]))
 
-                if not np.isinf(np.log(self.flags["pp_beta"](result.x[4]))) and not np.isnan(
-                        np.log(self.flags["pp_beta"](result.x[4]))):
-                    use_log_log += np.log(self.flags["pp_beta"](result.x[4]))
+                    if not np.isinf(np.log(self.flags["pp_beta"](result.x[4]))) and not np.isnan(
+                            np.log(self.flags["pp_beta"](result.x[4]))):
+                        use_log_log += np.log(self.flags["pp_beta"](result.x[4]))
 
                 self.results["use_log_lik"] = use_log_log
                 self.results["AIC"] = 2 * len(result.x) + 2 * use_log_log

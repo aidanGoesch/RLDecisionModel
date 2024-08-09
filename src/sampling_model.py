@@ -3,7 +3,7 @@ import numpy as np
 from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params
 from src.model import Model
 
-# alpha - learning rate; beta - softmax temp; beta_p - perseveration
+# alpha - learning rate; beta - softmax temp; beta_p (gets turned into beta_c) - perseveration
 
 NUM_PARAMS = 3
 PARAMS = ["alpha", "beta", "beta_c"]
@@ -11,10 +11,15 @@ PARAMS = ["alpha", "beta", "beta_c"]
 NUM_BANDITS = 3
 MAX_TRIALS = 180
 
+# CONSTANT TEST PARAMS
+# alpha = 0.957166948242946
+# beta = 9.707512974456824
+# beta_c = 1.801682813332801
+
 class SamplingModel(Model):
     def __init__(self, subj_idx : int, precomputed_data : dict, trial_rec : dict,
                  verbose : bool = False, very_verbose : bool = False):
-        super().__init__()
+        super().__init__("sample")
 
         super().__dict__["params"] = PARAMS
         super().__dict__["num_params"] = NUM_PARAMS
@@ -44,16 +49,12 @@ class SamplingModel(Model):
 
         # select a valid choice trial
         choice_trials = np.array(
-            [(x["choice"] > -1 and x["type"] == 0) for x in self.trial_rec[:MAX_TRIALS]])  # change this later
+            [(x["choice"] > -1 and x["type"] == 0) for x in self.trial_rec[:MAX_TRIALS]])
         choice_trials = np.where(choice_trials)
 
         alpha = params[0]
         beta = params[1]
         beta_c = params[2]
-
-        alpha = 0.957166948242946
-        beta = 9.707512974456824
-        beta_c = 1.801682813332801
 
         combs = self.flags["combs"]
         choice_rec = self.flags["choice_rec"]
@@ -86,12 +87,13 @@ class SamplingModel(Model):
 
                 rwdval[b] = choice_rec[b_prev_idx, 1].T.tolist()  # make sure this is an ndarray
 
+                pval[b] = [alpha * ((1 - alpha) ** (trial_idx - np.array(b_prev_idx)))]
+
                 if not isinstance(rwdval[b], int) and len(rwdval[b]) == 0:
                     rwdval[b] = [0]
                     pval[b] = [1]
 
-                pval[b] /= np.sum(rwdval[b])
-                # rwdval[b] = sign(rwdval[b])
+                pval[b] /= np.sum(pval[b])
                 if isinstance(rwdval[b], list):
                     rwdval[b] = sign(rwdval[b])
                 else:

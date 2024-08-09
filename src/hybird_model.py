@@ -20,7 +20,7 @@ MAX_TRIALS = 180
 class HybridModel(Model):
     def __init__(self, subj_idx: int, precomputed_data: dict, trial_rec : dict,
                  verbose : bool = False, very_verbose : bool = False):
-        super().__init__()
+        super().__init__("hybrid")
 
         super().__dict__["params"] = PARAMS
         super().__dict__["num_params"] = NUM_PARAMS
@@ -56,7 +56,7 @@ class HybridModel(Model):
         num_samples = self.flags["num_samples"]
 
         # initialize choice trials
-        choice_trials = np.array([(x["choice"] > -1 and x["type"] == 0) for x in self.trial_rec[:MAX_TRIALS]])   # change this later
+        choice_trials = np.array([(x["choice"] > -1 and x["type"] == 0) for x in self.trial_rec[:MAX_TRIALS]])
         choice_trials = np.where(choice_trials)
 
         alpha_smp = params[0]
@@ -68,13 +68,13 @@ class HybridModel(Model):
         combs = self.flags["combs"]
         choice_rec = self.flags["choice_rec"]
 
-        Q_td = np.array([np.array([0 for x in range(NUM_BANDITS)], dtype=float) for y in range(MAX_TRIALS)])
-        rpe_td = np.array([0 for i in range(MAX_TRIALS)], dtype=float)
-        run_Q = np.array([0 for i in range(NUM_BANDITS)], dtype=float)
-        pc = np.array([0 for i in range(MAX_TRIALS)], dtype=float)
+        Q_td = np.array([np.array([0 for x in range(NUM_BANDITS)], dtype=float) for _ in range(MAX_TRIALS)])
+        rpe_td = np.array([0 for _ in range(MAX_TRIALS)], dtype=float)
+        run_Q = np.array([0 for _ in range(NUM_BANDITS)], dtype=float)
+        pc = np.array([0 for _ in range(MAX_TRIALS)], dtype=float)
 
-        rwdval = [0 for i in range(NUM_BANDITS)]
-        pval = [0 for i in range(NUM_BANDITS)]
+        rwdval = [0 for _ in range(NUM_BANDITS)]
+        pval = [0 for _ in range(NUM_BANDITS)]
 
         for i in range(MAX_TRIALS):
             chosen_bandit = self.trial_rec[i]["choice"] + 1
