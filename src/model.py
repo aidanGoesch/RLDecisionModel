@@ -14,6 +14,7 @@ class Model:
         np.seterr(divide='ignore')
 
         self.params = []
+        self.original_params = []
         self.num_params = 0
 
         self.verbose = False
@@ -34,6 +35,7 @@ class Model:
     def fit(self):    # TODO: make this inheritable
         """Fit the model to the data passed into the constructor"""
         start, n_unchanged_trials = 0, 0
+        self.original_params = self.params[::]
 
         def f(x):
             """Function to be minimized by scipy.minimize"""
@@ -81,7 +83,7 @@ class Model:
 
                 # save results into attribute
                 self.results["n_log_lik"] = result.fun
-                self.results["params"] = result.x
+                self.results["params"] = self.original_params
                 self.results["transformed_params"] = transformed_xf
                 self.results["model"] = "Hybrid"
                 self.results["exit flag"] = result.status

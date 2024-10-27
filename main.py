@@ -27,14 +27,14 @@ def simulate_subject(subj_idx : int, verbose = False):
 
     # Create and fit model
     trial_rec = subject_data["trial_rec"]
+
     # Change the model here
-    model = TDModel(subj_idx, precomputed_data, trial_rec, True, False)
+    model = HybridModel(subj_idx, precomputed_data, trial_rec, True, False)
     model.fit()
 
 
 # TODO / Next Steps
 # - Make a writer - class that can write the data to output files
-# - add other models
 
 
 if __name__ == '__main__':

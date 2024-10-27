@@ -1,4 +1,3 @@
-import string
 import numpy as np
 
 from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params
@@ -38,7 +37,7 @@ class TDModel(Model):
 
     def likelihood(self, params):
         """Function that computes the log likelihood of choosing each deck of cards
-                RETURNS: n_log_likelihood : list[list], Q_td : list[list], rpe_td : list[list], pc : list[list]"""
+                RETURNS: n_log_likelihood : list[list], Q : list[list], rpe : list[list], pc : list[list]"""
         choice_trials = np.array([(x["choice"] > -1 and x["type"] == 0) for x in self.trial_rec[:MAX_TRIALS]])
         choice_trials = np.where(choice_trials)
 

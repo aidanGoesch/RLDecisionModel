@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.optimize import minimize
 
 from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params
 from src.model import Model
@@ -97,6 +96,7 @@ class HybridModel(Model):
                     b_prev_idxs = combs[i][b] - 1
 
                 rwdval[b] = choice_rec[b_prev_idxs, 1].T.tolist()
+                # EQ 5
                 pval[b] = np.array([alpha_smp * ((1 - alpha_smp) ** (i - b_prev_idxs))])
 
                 if not isinstance(rwdval[b], int) and len(rwdval[b]) < 1:
@@ -112,6 +112,8 @@ class HybridModel(Model):
 
             Q_td[i] = run_Q   # save the record of Q values used to make the TD-model based choice
             rpe_td[i] = reward - run_Q[chosen_bandit - 1]
+
+            # EQ 4
             run_Q[chosen_bandit - 1] += alpha_td * rpe_td[i]
 
             # find all indices that are not being chosen
@@ -157,6 +159,7 @@ class HybridModel(Model):
 
             softmax_term = 1. / (1. + rvmat)
 
+            # EQ 6 maybe
             pc[i] = max(np.sum(pmat2 * softmax_term.T), 0.000000000000000000000000001)
 
         n_log_likelihood = -sum(np.log(pc[choice_trials]))
