@@ -3,8 +3,8 @@ import numpy as np
 from src.utils import sign, PARAM_CONSTANTS, FLAGS, ITERATIONS, transform_params
 from src.model import Model
 
-NUM_PARAMS = 3
-PARAMS = ["alpha", "beta", "beta_c"]
+NUM_PARAMS = 4
+PARAMS = ["alpha", "beta", "beta_c", "lambda"]
 
 NUM_BANDITS = 3
 MAX_TRIALS = 180
@@ -41,19 +41,22 @@ class TDModel(Model):
         choice_trials = np.array([(x["choice"] > -1 and x["type"] == 0) for x in self.trial_rec[:MAX_TRIALS]])
         choice_trials = np.where(choice_trials)
 
+
         alpha = params[0]
         beta = params[1]
         beta_c = params[2]
+        lam = params[3]
 
         reset_trial = self.flags["reset_Q"]
 
         Q = np.array([np.array([0 for _ in range(NUM_BANDITS)], dtype=float) for _ in range(MAX_TRIALS)])
+        E = np.array([0 for _ in range(NUM_BANDITS)], dtype=float)
         pc = np.array([0 for _ in range(MAX_TRIALS)], dtype=float)
         rpe = np.array([0 for _ in range(MAX_TRIALS)], dtype=float)
         run_Q = np.array([0 for _ in range(NUM_BANDITS)], dtype=float)
 
         for trial_idx in range(MAX_TRIALS):
-            Q[trial_idx, :] = run_Q
+            Q[trial_idx, :] = run_Q.copy()
 
             chosen_bandit = self.trial_rec[trial_idx]["choice"] + 1
             reward = self.trial_rec[trial_idx]["rwdval"]
@@ -82,7 +85,11 @@ class TDModel(Model):
 
             rpe[trial_idx] = reward - run_Q[chosen_bandit - 1]
 
-            run_Q[chosen_bandit - 1] += alpha * rpe[trial_idx]
+            chosen_idx = chosen_bandit - 1
+            E *= lam
+            E[chosen_idx] += 1.0
+
+            run_Q += alpha * rpe[trial_idx] * E
 
         n_log_likelihood = -sum(np.log(pc[choice_trials]))
 

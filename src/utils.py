@@ -5,11 +5,12 @@ import numpy as np
 from scipy.stats import beta, norm
 
 
-# Experiment constants
+# Experiment constants  [[low_bound, high_bound], something]
 PARAM_CONSTANTS = {
     "alpha": [[0, 1], 0.05],
     "beta": [[0, 20], 0.5],
     "beta_c": [[-3, 3], 0.1],
+    "lambda": [[0, 1], 0.5]
 }
 
 ITERATIONS = 5
@@ -22,6 +23,9 @@ FLAGS["pp_beta"] = lambda x: norm.pdf((x - low_bound) / (up_bound - low_bound), 
 
 low_bound, up_bound = PARAM_CONSTANTS["beta_c"][0]
 FLAGS["pp_beta_c"] = lambda x: norm.pdf((x - low_bound) / (up_bound - low_bound), 0, 10)
+
+low_bound, up_bound = PARAM_CONSTANTS["lambda"][0]
+FLAGS["pp_lambda"] = lambda x: norm.pdf((x - low_bound) / (up_bound - low_bound), 0, 10)
 
 
 # helper functions

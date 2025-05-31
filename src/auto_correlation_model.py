@@ -2,29 +2,50 @@ import math
 import random
 import numpy as np
 
-from types import SimpleNamespace
-
-from subject_data import SubjectData
+from src.utils import sign
 
 MODEL_TYPES = ["Sampler", "TD", "Hybrid"]
+
+TASKVARS = {
+    "optdefaults": {
+        "numTrials": 360,
+        "numBandits": 3,
+        "numProbeTrials": 60,
+        "fracValidProbes": 50 / 60,
+        "roomLen": 30,
+        "numRooms": 6,
+        "payoffSwitch": 10,
+        # Subject characteristics
+        "memAccuracy": 0.95,  # dist?
+        "memConfident": 0.85,  # dist?
+        "subjAlpha": 0.4,  # \alpha = learning rate / decay rate                         # dist? set to fit values?
+        "subjAlphaMem": 0.2,  # \alpha_{mem} = learning / decay rate on reinstatements      # dist? set to fit values?
+        "subjBeta": 1,  # \beta  = softmax temp                                       # dist? set to fit values?
+        "subjCtxAC": 0.95,  # \pi    = context autocorrelation between successive samples # dist? set to fit values?
+        "subjPersev": 0,  # Choice stickiness
+        "subjSamples": 6,  # # of samples to draw for each choice                        # dist? set to fit values? 0 == use adaptive threshold (XXX unimp)?
+        "accumulateSamples": False,
+        "mcSamples": 500,
+        "whichModel": "MODEL_SAMPLER",  # Placeholder for `taskvars.MODEL_SAMPLER`
+        "decayType": "DECAYTYPE_COMBINED",  # Placeholder for `taskvars.DECAYTYPE_COMBINED`
+    }
+}
 
 
 # DEPRECATED - NOT IN USE
 
 class Model:
-    def __init__(self, sim_type: str, options: SimpleNamespace, task_vars: SimpleNamespace, subject_data: SubjectData = None):
+    def __init__(self, options: dict, subject_data: "SubjectData" = None):
         self.subject_data = subject_data
-        assert sim_type in MODEL_TYPES, "ERROR: Invalid Model Type"
 
-        self.sim_type = sim_type
         self.options = None
-        self.task_vars = task_vars
+        self.task_vars = TASKVARS
 
         self.trial_rec = None
 
-        self.parse_args(options, defaults=task_vars["OPT_DEFAULTS"])
+        self.parse_args(options, defaults=TASKVARS["optdefaults"])
 
-    def parse_args(self, opts: SimpleNamespace, defaults: SimpleNamespace):
+    def parse_args(self, opts: dict, defaults: dict):
         """Function that sets default values for options and updates according to options
         passed into the constructor"""
         self.options = defaults
@@ -38,8 +59,13 @@ class Model:
         else:
             self.options.simulate_subject = False
 
-
-        # COME BACK TO THIS
+        if self.options.get("mcSamples") is None:
+            if self.options.get("simulateSubj"):
+                # Simulating: Just one draw.
+                self.options["mcSamples"] = 1
+            else:
+                # Fitting: Approximate distribution using mcSamples # of samples
+                self.options["mcSamples"] = self.task_vars["optdefaults"]["mcSamples"]
 
         self.options.subject_samples = math.ceil(self.options.subj_samples)
 
@@ -68,7 +94,7 @@ class Model:
             self.task_vars.contexts = list(range(self.options.num_rooms))
 
         else:
-            self.trial_rec = [SimpleNamespace() for i in range(self.options.num_trials)]
+            self.trial_rec = [dict() for _ in range(self.options.num_trials)]
             mem_rec = []
 
             self.task_vars.init_payouts = [60, 30, 10]
@@ -174,7 +200,7 @@ class Model:
                 self.do_mem_probe(mem_rec)
 
 
-    def do_choice_trial(self) -> tuple[int]:
+    def do_choice_trial(self):
         """Function that runs a choice trial"""
 
         # probability of choosing each bandit on this trial
@@ -219,7 +245,7 @@ class Model:
 
         else:
             for mc_idx in range(self.options.mc_samples):
-                if self.options.which_model == self.task_vars.MODEL_SAMPLER:
+                if self.options.which_model == "MODEL_SAMPLER":
                     # improvement possible
                     sample_context = -1
                     sample_choice = []    # this may be wrong
@@ -232,7 +258,7 @@ class Model:
                                 sample_context != max(self.task_vars.contexts) and
                                     sample_context != self.trial_rec[self.task_vars.trial_idx - 1].contexts):
 
-                                if self.options.decay_type == self.task_vars.DECAYTYPE_COMBINED:
+                                if self.options.decay_type == "DECAYTYPE_COMBINED":
                                     # improvement possible
                                     ctx_trials = []
                                     try:
@@ -390,7 +416,110 @@ class Model:
         else:
             cp = 1 / self.options.num_bandits
 
+        return cp, self.trial_rec, self.task_vars
 
-    def do_mem_probe(self, mem_rec) -> tuple[int, int]:
-        pass
+    def do_mem_probe(self, probe_type, probe_data):
+        """
+        Executes a memory probe based on the given probe type and data.
+
+        Args:
+            probe_type (str): The type of memory probe ('free_recall', 'cued_recall', etc.).
+            probe_data (dict): Relevant data for the memory probe, including cues and responses.
+
+        Returns:
+            dict: The result of the memory probe, including accuracy, response time, and other metrics.
+        """
+        # Initialize response metrics
+        response = {
+            "accuracy": 0.0,
+            "response_time": None,
+            "errors": [],
+        }
+
+        # Validate probe type
+        valid_probe_types = {"free_recall", "cued_recall", "recognition"}
+        if probe_type not in valid_probe_types:
+            response["errors"].append(f"Invalid probe type: {probe_type}")
+            return response
+
+        try:
+            # Process based on probe type
+            if probe_type == "free_recall":
+                response["accuracy"] = self._process_free_recall(probe_data)
+            elif probe_type == "cued_recall":
+                response["accuracy"] = self._process_cued_recall(probe_data)
+            elif probe_type == "recognition":
+                response["accuracy"], response["response_time"] = self._process_recognition(probe_data)
+
+        except Exception as e:
+            response["errors"].append(str(e))
+
+        return response
+
+    def _process_free_recall(self, probe_data):
+        """
+        Processes a free recall memory probe.
+
+        Args:
+            probe_data (dict): Data for the free recall probe.
+
+        Returns:
+            float: Accuracy of the free recall.
+        """
+        # Simulate free recall logic (placeholder)
+        recalled_items = probe_data.get("recalled_items", [])
+        target_items = probe_data.get("target_items", [])
+
+        if not target_items:
+            raise ValueError("Target items missing for free recall.")
+
+        correct_recall = sum(1 for item in recalled_items if item in target_items)
+        return correct_recall / len(target_items)
+
+    def _process_cued_recall(self, probe_data):
+        """
+        Processes a cued recall memory probe.
+
+        Args:
+            probe_data (dict): Data for the cued recall probe.
+
+        Returns:
+            float: Accuracy of the cued recall.
+        """
+        # Simulate cued recall logic (placeholder)
+        cues = probe_data.get("cues", {})
+        responses = probe_data.get("responses", {})
+
+        if not cues or not responses:
+            raise ValueError("Cues or responses missing for cued recall.")
+
+        correct = sum(1 for cue, response in responses.items() if cue in cues and cues[cue] == response)
+        return correct / len(cues)
+
+    def _process_recognition(self, probe_data):
+        """
+        Processes a recognition memory probe.
+
+        Args:
+            probe_data (dict): Data for the recognition probe.
+
+        Returns:
+            tuple: Accuracy and response time of the recognition probe.
+        """
+        # Simulate recognition logic (placeholder)
+        presented_items = probe_data.get("presented_items", [])
+        response_items = probe_data.get("response_items", [])
+
+        if not presented_items:
+            raise ValueError("Presented items missing for recognition.")
+
+        correct = sum(1 for item in response_items if item in presented_items)
+        accuracy = correct / len(presented_items)
+
+        response_time = probe_data.get("response_time", None)  # Placeholder for response time calculation
+        return accuracy, response_time
+
+
+if __name__ == "__main__":
+    model = Model()
 
